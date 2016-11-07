@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import InlineEdit from 'react-edit-inline';
@@ -27,15 +28,6 @@ class Notes extends React.Component {
     });
     $(event.currentTarget).closest('.button-wrapper')[0].childNodes.forEach(button => $(button).removeClass('selected'));
     $(event.currentTarget).addClass('selected');
-  }
-
-  newNote() {
-    this.setState({
-      'noteType': 'freeForm',
-      'currNote': '',
-      'viewAll': false
-    })
-    document.getElementById('note').value = '';
   }
 
   saveNote() {
@@ -130,9 +122,6 @@ class Notes extends React.Component {
           </div>
           <div className="button-wrapper floatRight">
             <button id='save' onClick={this.saveNote.bind(this)}>Save</button>
-          </div>
-          <div className="button-wrapper">
-            <button onClick={this.newNote.bind(this)}>New</button>
           </div>
         </div>
       </div>
