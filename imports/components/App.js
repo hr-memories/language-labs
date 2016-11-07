@@ -1,8 +1,8 @@
 import React          from 'react';
 import { Meteor }     from 'meteor/meteor';
-import Dashboard      from './Dashboard';
 import HomePage       from './HomePage';
 import SelectLanguage from './SelectLanguage';
+import Navigation     from './Navigation';
 
 
 const validateProfile = (obj, ...args) => {
@@ -21,7 +21,8 @@ const App = ({
   user, 
   loading,
   peer,
-  userNotes
+  userNotes,
+  userVideos
 }) => {
   if (!loading && user) {
     if (!validateProfile(user, 'profile', 'complete')) {
@@ -29,9 +30,8 @@ const App = ({
         <SelectLanguage id={Meteor.userId()} /> 
       );
     } else {
-
       return (
-        <Dashboard 
+        <Navigation 
           onlineUsers={onlineUsers.filter(u => (
             u.profile.language.toLowerCase() === user.profile.learning.toLowerCase() 
             && u.profile.learning.toLowerCase() === user.profile.language.toLowerCase()
@@ -40,6 +40,7 @@ const App = ({
           peer={peer}
           user={user}
           notes={userNotes}
+          videos={userVideos}
         />
       );
     }

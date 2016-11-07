@@ -1,28 +1,32 @@
 import React from 'react';
 import { Meteor } from 'meteor/meteor';
 import InlineEdit from 'react-edit-inline';
+import _ from 'lodash';
 
 class Notes extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      'viewAll': false,
-      'noteType': 'freeForm',
-      'currNote': ''
+      'noteType': 'flashcard',
+      'nativeText': '',
+      'learningText': ''
     }
   }
 
-  viewNotes() {
-    this.setState({'viewAll': true});
+  viewFlashcards(event) {
+    this.setState({
+      'noteType': 'flashcard'
+    });
+    $(event.currentTarget).closest('.button-wrapper')[0].childNodes.forEach(button => $(button).removeClass('selected'));
+    $(event.currentTarget).addClass('selected');
   }
 
-  displayNote(note) {
+  viewNotes(event) {
     this.setState({
-      'viewAll': false,
-      'noteType': note.noteType,
-      'currNote': note
+      'noteType': 'freeForm'
     });
-     
+    $(event.currentTarget).closest('.button-wrapper')[0].childNodes.forEach(button => $(button).removeClass('selected'));
+    $(event.currentTarget).addClass('selected');
   }
 
   newNote() {
@@ -36,8 +40,9 @@ class Notes extends React.Component {
 
   saveNote() {
     if (this.state.noteType === 'freeForm') {
-      if (this.state.currNote === '') {
-        var text = document.getElementById('note').value;
+      var text = document.getElementById('note').value;
+      if (text.length) {
+        document.getElementById('note').value = '';
 
         Meteor.call('addNote', {
           'text': text,
@@ -47,75 +52,84 @@ class Notes extends React.Component {
         }, 
         (err, res) => {
           if (err) { 
-            console.log('saving note:', res);
-            return console.log('error saving note to db:', err);
-          }
-        });
-
-      } else {
-        var text = document.getElementById('note').value;
-
-        Meteor.call('updateNote', {
-          'text': text,
-          'userId': Meteor.userId(),
-          'date': new Date().toString().slice(0, 24),
-          'noteType': 'freeForm',
-          'noteId': this.state.currNote._id
-        }, 
-        (err, res) => {
-          if (err) { 
-            console.log('saving note:', res);
             return console.log('error saving note to db:', err);
           }
         });
       }
-
     } else {
-      var firstLang = this.props.user.profile.language.toLowerCase();
-      var secondLang = this.props.user.profile.learning.toLowerCase();
-      var firstLangText = document.getElementById('first-lang-text').value;
-      var secondLangText = document.getElementById('second-lang-text').value;
+      var sourceLang = this.props.user.profile.language.toLowerCase();
+      var targetLang = this.props.user.profile.learning.toLowerCase();
 
       var text = {};
-      text[firstLang] = firstLangText;
-      text[secondLang] = secondLangText;
+      text[sourceLang] = this.state.nativeText;
+      text[targetLang] = this.state.learningText;
 
-      Meteor.call('updateNote', {
+      this.setState({
+        nativeText: '',
+        learningText: ''
+      });
+
+
+      Meteor.call('addNote', {
         'text': text,
         'userId': Meteor.userId(),
         'date': new Date().toString().slice(0, 24),
-        'noteType': 'flashcard',
-        'noteId': this.currNote._id
+        'noteType': 'flashcard'
       }, 
       (err, res) => {
         if (err) { 
-          console.log('saving note:', res);
-          return console.log('error saving note to db:', err); 
+          console.log('error saving note to db:', err); 
         }
       });
     }
   }
 
+  nativeTextChanged(event) {
+    this.setState({nativeText: event.target.value});
+  }
+
+  learningTextChanged(event) {
+    this.setState({learningText: event.target.value});
+  }
+
   render() {
     
     return (
-      <div className="user-profile">
-        {
-          this.state.viewAll ?
-            <NotesList notes={this.props.notes} displayNote={this.displayNote.bind(this)}/>
-          :
-          this.state.noteType === 'freeForm' ?
-            <textarea id='note' className="active-note" placeholder="Type your notes here" defaultValue={this.state.currNote.text}>
+      <div className="notes-container">
+      {
+        this.state.noteType === 'freeForm' ?
+          <div className='notes'>
+            <div className='saved-notes'>
+              <NotesList notes={this.props.notes} />
+            </div>
+            <textarea id='note' className="new-note" placeholder="Type a note here">
             </textarea>
-          :
-            <Flashcard note={this.state.currNote} user={this.props.user}/>
-        }
-        <div>
-          <div className="button-wrapper">
-            <button onClick={this.viewNotes.bind(this)}>View all</button>
           </div>
-          <div className="button-wrapper">
-            <button onClick={this.saveNote.bind(this)}>Save</button>
+        :
+          <div className='notes'>
+            <div className='saved-notes'>
+              <FlashcardsList notes={this.props.notes} user={this.props.user}/>
+            </div>
+            <form>
+              <label >Add a flashcard</label><br/>
+              <div className='inputs'>
+                <input placeholder={_.capitalize(this.props.user.profile.language)} 
+                        value={this.state.nativeText} 
+                        onChange={this.nativeTextChanged.bind(this)}/>
+                <input placeholder={_.capitalize(this.props.user.profile.learning)} 
+                        value={this.state.learningText}
+                        onChange={this.learningTextChanged.bind(this)}/>
+              </div>
+            </form>
+          </div>
+      }
+        <div className='notes-buttons'>
+          <div className="button-wrapper floatLeft">
+            <button className='selected' id='flashcards' onClick={this.viewFlashcards.bind(this)}>Flashcards</button>
+            <button onClick={this.viewNotes.bind(this)}>Notes</button>
+          </div>
+          <div className="button-wrapper floatRight">
+            <button id='save' onClick={this.saveNote.bind(this)}>Save</button>
           </div>
           <div className="button-wrapper">
             <button onClick={this.newNote.bind(this)}>New</button>
@@ -136,43 +150,52 @@ class NotesList extends React.Component {
     return (
       <div>
       {
-        this.props.notes.map(note => (
-          <div>
-            <text onClick={this.props.displayNote.bind(null, note)}>{note.title}</text>
-          </div>
-        ))
+        this.props.notes.map(note => {
+          if (note.noteType === 'freeForm') {
+            return (
+              <div className='note'>
+                <text>{note.text}</text>
+              </div>
+            )
+          }
+        })
       }
       </div>
     );
   }
 }
 
-class Flashcard extends React.Component {
+class FlashcardsList extends React.Component {
   constructor(props) {
     super(props)
   }
 
   render() {
     return (
-      <div className='flashcard-container' style={{display: 'flex'}}>
-        <div className='first-language-container'>
-          <div className='language'>
-            <text>{this.props.user.profile.language}</text>
-          </div>
-          <div className='text'>
-            <textarea id='first-lang-text' rows='20' type="text" defaultValue={this.props.note.text[this.props.user.profile.language]}></textarea>
-          </div>
-        </div>
-
-        <div className='second-language-container'>
-          <div className='language'>
-            <text>{this.props.user.profile.learning}</text>
-          </div>
-          <div className='text'>
-            <textarea id='second-lang-text' rows='20' type="text" defaultValue={this.props.note.text[this.props.user.profile.learning]}></textarea>
-          </div>
-        </div>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>{_.capitalize(this.props.user.profile.language)}</th>
+            <th>{_.capitalize(this.props.user.profile.learning)}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            this.props.notes.map(note => {
+              if (note.noteType === 'flashcard' && 
+                Object.keys(note.text).indexOf(this.props.user.profile.language.toLowerCase()) !== -1 &&
+                Object.keys(note.text).indexOf(this.props.user.profile.learning.toLowerCase()) !== -1) {
+                return (
+                  <tr>
+                    <td><text>{note.text[this.props.user.profile.language.toLowerCase()]}</text></td>
+                    <td><text>{note.text[this.props.user.profile.learning.toLowerCase()]}</text></td>
+                  </tr>
+                )
+              }
+            })
+          }
+        </tbody>
+      </table>    
     )
   }
 }

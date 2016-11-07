@@ -1,8 +1,15 @@
 import { Meteor } from 'meteor/meteor';
 import { Mongo } from 'meteor/mongo';
+import AWS from 'aws-sdk';
+AWS.config = new AWS.Config({
+});
+var s3 = new AWS.S3();
  
 export const Notes = new Mongo.Collection('notes');
 Meteor.notes = Notes;
+
+export const Videos = new Mongo.Collection('videos');
+Meteor.videos = Videos;
 
 import { HTTP } from 'meteor/http';
 
@@ -18,6 +25,10 @@ Meteor.startup(function () {
 
   Meteor.publish('notes', function () {
     return Notes.find({}, {userId: true});
+  });
+
+  Meteor.publish('videos', function () {
+    return Videos.find({}, {userId: true});
   });
 
   Meteor.methods({
@@ -45,6 +56,16 @@ Meteor.startup(function () {
           'userId': userId, 
           'title': date, 
           'noteType': noteType
+        }
+      )
+    },
+
+    'addVideos'({url, userId, date}) {
+      Meteor.videos.insert(
+        {
+          'url': url,
+          'userId': userId,
+          'date': date
         }
       )
     }

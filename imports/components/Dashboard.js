@@ -1,6 +1,5 @@
 import React             from 'react';
 import { Meteor }        from 'meteor/meteor';
-import AccountsUIWrapper from './accounts';
 import SelectLanguage    from './SelectLanguage';
 import Matches           from './Matches';
 import UserProfile       from './UserProfile';
@@ -11,6 +10,12 @@ import Waiting           from './Waiting';
 import Welcome           from './Welcome';
 import Notes             from './Notes';
 import Transcriber       from './Transcriber';
+import NavigationWrapper from './NavigationWrapper';
+
+// initialize AWSbucket with my pwd that should not to server
+AWS.config = new AWS.Config({
+});
+var s3 = new AWS.S3();
 
 
 class Dashboard extends React.Component {
@@ -22,23 +27,30 @@ class Dashboard extends React.Component {
       currentCall: false,
       callDone: false,
       callLoading: false,
-      partner: false
+      partner: false,
+      mediaRecorder: {},
+      fullBlob: ""
     };
 
     this.startChat.bind(this);
     this.endChat.bind(this);
+
+    this.myVideo;
   }
 
   startChat(users, peer) {
     // save context
+    var allBlobs = [];
+
     var dashboard = this;
 
     // get html video elements
+    this.myVideo = this.refs.myVideo;
     var myVideo = this.refs.myVideo;
     var theirVideo = this.refs.theirVideo;
     
     // get audio/video permissions
-    navigator.getUserMedia({ audio: true, video: true }, function (stream) {
+    navigator.getUserMedia({ audio: true, video: true }, (stream) => {
       // save your users own feed to state
       dashboard.setState({ localStream: stream });
 
@@ -47,6 +59,47 @@ class Dashboard extends React.Component {
 
       // show own videostream of user
       myVideo.src = URL.createObjectURL(stream);
+
+      var options = {mimeType: 'video/webm', bitsPerSecond: 100000};
+      var mediaRecorder = new MediaRecorder(stream, options);
+
+      this.setState({mediaRecorder: mediaRecorder});
+
+      // time in start is how often events will be fired
+      this.state.mediaRecorder.start(10);
+
+      console.log('Created MediaRecorder', mediaRecorder, 'with options', options);
+
+      this.state.mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          allBlobs.push(event.data);
+        }
+      }
+
+      this.state.mediaRecorder.onstop = () => {
+        console.log('media recorder closed');
+        var fullBlob = new Blob(allBlobs);
+        this.setState({fullBlob: fullBlob});
+        allBlobs = [];
+        console.log('created new blob', fullBlob);
+        var params = {ACL: "public-read", Bucket: "invalidmemories", Key: "arealvid" + fullBlob.size, Body: fullBlob};
+
+        s3.upload(params, (err, data) => {
+          if (err) {
+            console.log('err uploading ', err);
+          } else {
+            console.log('success uploading', data);
+            Meteor.call('addVideos', {
+              url: data.Location,
+              userId: Meteor.userId(),
+              date: new Date().toString().slice(0, 24)
+            });
+            console.log('added Video hopefully');
+          }
+        });
+      }
+
+
 
       // give the current user a peerId and save their streamId
       Meteor.users.update({_id: Meteor.userId()}, {
@@ -112,6 +165,10 @@ class Dashboard extends React.Component {
       currentCall: false,
       callDone: true 
     });
+    
+    // stop recorder if hasnt already stopped
+    this.state.mediaRecorder.stop();
+    
   }
 
   toggleLoading(loading) {
@@ -136,58 +193,47 @@ class Dashboard extends React.Component {
     });
   }
 
+  renderVideo(data) {
+    // var superBuffer = new Blob(this.state.fullBlob, {type: 'video/webm'});
+    console.log('rendered');
+    this.myVideo.src = URL.createObjectURL(data);
+  }
+
+  // dont forget to add review back in
   render() {
     return (
       <div className='dashboard'>
-        <div className='top'>
-          <div className='video-box'>
-            {!this.state.callDone &&
-              <div className='video-wrapper'>
-                {!this.state.callLoading && !this.state.currentCall &&
-                  <Welcome numMatches={this.props.onlineUsers.length}/>
-                }
-                {this.state.callLoading &&
-                  <Waiting />
-                }
-                <video ref='myVideo' id='myVideo' muted='true' autoPlay='true' 
-                  className={this.state.callLoading ? 'hidden' : null}></video>
-                <video ref='theirVideo' id='theirVideo' muted='true' autoPlay='true'
-                  className={this.state.callLoading ? 'hidden' : null}></video>
-              </div>
-            }
-
-            {!this.state.currentCall && this.state.callDone &&
-              <Review 
-                partner={this.state.partner}
-                clearPartner={this.clearPartner.bind(this)}
-              />
-            }
-          </div>
-          <div className='profile'>
-            <div className='sign-out'>
-              <AccountsUIWrapper />
-            </div>
-            <Notes notes={this.props.notes} user={this.props.user}/>
-          </div>
-        </div>
-        <div className='bottom'>
-          <div className='text-box'>
-           
-
-          <Transcriber/>
-            
-          </div>
-          <div className='new-chat'>
-            <div className='selected-language'>
-              Selected Languages
-            </div>
-            <div className='language'>
-              {
-               `${this.props.user.profile.language} / 
-                ${this.props.user.profile.learning}`
+        <div className='left'>
+          <div className='topLeft'>
+            <div className='video-box shadowbox'>
+              {!this.state.callDone &&
+              
+                <div className='video-wrapper'>
+                  {!this.state.callLoading && !this.state.currentCall &&
+                    <Welcome numMatches={this.props.onlineUsers.length}/>
+                  }
+                  {this.state.callLoading &&
+                    <Waiting />
+                  }
+                  <video ref='myVideo' id='myVideo' muted='true' autoPlay='true' 
+                    className={this.state.callLoading ? 'hidden' : null}></video>
+                  <video ref='theirVideo' id='theirVideo' autoPlay='true'
+                    className={this.state.callLoading ? 'hidden' : null}></video>
+                </div>
               }
             </div>
-            <div className='button-wrapper'>
+          </div>
+          <div className='bottomLeft shadowbox'>
+            <Transcriber user={this.props.user}/>  
+          </div>
+        </div>
+        <div className='right'>
+          <div className='topRight shadowbox'>
+            <NavigationWrapper returnToNav={ this.props.returnToNav } />
+            <Notes notes={this.props.notes} user={this.props.user}/>
+          </div>
+          <div className='bottomRight shadowbox'>
+            <div className='waiting-button-wrapper'>
               {!this.props.onlineUsers[0] &&
                 <button>Waiting</button>
               }
@@ -210,15 +256,3 @@ class Dashboard extends React.Component {
 }
 
 export default Dashboard;
-
- // { 
- //              this.state.partner &&
- //              <div className='clock-suggestion-wrapper'>
- //                <Clock partner={this.state.partner} callDone={this.state.callDone} />
- //                <TopicSuggestion partner={this.state.partner}/>
- //              </div>
- //            }
- // {
- //              !this.state.partner &&
- //              <div className='waiting-for-match'>Waiting for match...</div>
- //            }
